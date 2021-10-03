@@ -5,15 +5,15 @@ import java.io.PrintWriter;
 import java.io.Serializable;
 import java.net.Socket;
 
-public class clientData implements Serializable {
+public class ClientData implements Serializable {
 
 	private static final long serialVersionUID = 1L;
-	Socket socket;
-	PrintWriter out;
-	BufferedReader in;
-	String pseudo;
+	private Socket socket;
+	private PrintWriter out;
+	private BufferedReader in;
+	private String pseudo;
 	
-	public clientData(Socket socket, PrintWriter out, BufferedReader in) {
+	public ClientData(Socket socket, PrintWriter out, BufferedReader in) {
 		this.socket = socket;
 		this.out = out;
 		this.in = in;
