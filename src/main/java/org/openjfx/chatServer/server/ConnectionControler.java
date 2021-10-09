@@ -1,24 +1,16 @@
 package org.openjfx.chatServer.server;
 
-import java.net.ServerSocket;
-import java.util.ArrayList;
-
 import org.openjfx.chatServer.socket.SimpleTextSocket;
-import org.openjfx.chatServer.socket.SocketObserver;
-import org.openjfx.chatServer.socket.clientData;
+import org.openjfx.chatServer.socket.SocketStatusObserver;
 import org.openjfx.chatServer.utilities.RMIManager;
-
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 
 
-public class ConnectionControler implements SocketObserver {
+public class ConnectionControler implements SocketStatusObserver {
 
-	ArrayList<clientData> clientList = new ArrayList<clientData>();
-	ServerSocket socketserver;
-	
 	SimpleTextSocket simpleTextSocket;
 
 	@FXML
@@ -34,7 +26,6 @@ public class ConnectionControler implements SocketObserver {
 	@FXML
 	public void initialize() {
 		updateSocketStatus(0);
-		
 		RMIManager.createRMIManager(1099);
 	}
 
@@ -43,7 +34,8 @@ public class ConnectionControler implements SocketObserver {
 	 */
 	@FXML
 	public void connect() {
-		simpleTextSocket = new SimpleTextSocket(portField.getText(), this);
+		simpleTextSocket = new SimpleTextSocket(portField.getText());
+		simpleTextSocket.subscribe(this);
 		simpleTextSocket.connect();
 	}
 	
@@ -52,7 +44,7 @@ public class ConnectionControler implements SocketObserver {
 	 */
 	@FXML
 	public void close() {
-		simpleTextSocket.close();
+		if(simpleTextSocket != null) simpleTextSocket.close();
 	}
 
 	/**
@@ -65,7 +57,6 @@ public class ConnectionControler implements SocketObserver {
 	 */
 	@Override
 	public void updateSocketStatus(int sigValue) {
-		
 		if(sigValue == 0) {
 			connect.setDisable(false);
 			disconnect.setDisable(true);

@@ -14,15 +14,16 @@ import org.openjfx.chatServer.utilities.RMIManager;
 
 import javafx.application.Platform;
 
-public class SimpleTextSocket {
+public class SimpleTextSocket implements SocketStatusObservable{
 	
-	ArrayList<clientData> clientList = new ArrayList<clientData>();
+	ArrayList<ClientData> clientList = new ArrayList<ClientData>();
+	ArrayList<SocketStatusObserver> observersStatus = new ArrayList<>();
+	
 	ServerSocket socketserver;
-	SocketObserver uiSocket;
 	int port;
 	
 	
-	public SimpleTextSocket(String port, SocketObserver uiSocket) {
+	public SimpleTextSocket(String port) {
 		try {
 			this.port = Integer.parseInt(port);
 			if(this.port < 1024 || this.port > 65536 ) {
@@ -31,7 +32,6 @@ public class SimpleTextSocket {
 		} catch (NumberFormatException e) {
 			this.port = 50000; // default
 		}
-		this.uiSocket = uiSocket;
 	}
 	/**
 	 * On connect button clicked, launch the server. If selected port isnt a valid number port, port will start on port 50000
@@ -41,7 +41,7 @@ public class SimpleTextSocket {
 		// Start server on the defined port
 		try {
 			socketserver = new ServerSocket(port); //create the server
-			uiSocket.updateSocketStatus(1);
+			notifyStatusObservers(1);
 			
 			try {
 				RMIEndPoint endPoint = new RMIEndPoint(this);
@@ -50,30 +50,27 @@ public class SimpleTextSocket {
 				e.printStackTrace();
 			}
 
-
-
 			Thread getClientConnection = new Thread(()->{ // launch a thread to get new connection
 				try {
 					getClientConnection(socketserver); // handles connection asks
 				} catch (IOException e) {
 					if(socketserver.isClosed()) {
-						close();
 						/*
 						 *  This code will be called at the end of this thread
 						 *  We can't use join, it freezes the javafx thread, all button, field etc, in fact, it would crash the app
 						 *  You must never block top javafx thread, not with join, not even with futur task or similar stuff
 						 */
 						Platform.runLater(()-> {
-							uiSocket.updateSocketStatus(2);	
+							notifyStatusObservers(2);	
 						});
 					}else {
-						e.printStackTrace(); // unexpected error...			
+						close();
 					}
 				}
 			});
 			getClientConnection.start();
 		} catch (Exception e) {
-			uiSocket.updateSocketStatus(3); // unexpected error during the creation of serverSocket object
+			notifyStatusObservers(3); // unexpected error during the creation of serverSocket object
 		}
 	}
 
@@ -101,10 +98,11 @@ public class SimpleTextSocket {
 	 * @throws IOException
 	 */
 	public void handleClientConnection(Socket client) throws IOException{
-		clientList.add( new clientData(client, new PrintWriter(client.getOutputStream()), new BufferedReader(new InputStreamReader (client.getInputStream())) ) );
+		ClientData clientData = new ClientData(client, new PrintWriter(client.getOutputStream()), new BufferedReader(new InputStreamReader (client.getInputStream())) );
+		clientList.add( clientData );
 
 		Thread receiveClientData = new Thread( ()->{
-			receiveClientData(clientList.get(clientList.size()-1));
+			receiveClientData(clientData);
 		});
 		receiveClientData.start();
 	}
@@ -114,7 +112,8 @@ public class SimpleTextSocket {
 	 * @param object representing client
 	 * @throws IOException
 	 */
-	public void receiveClientData(clientData client) {
+	public void receiveClientData(ClientData client) {
+		boolean hasBeenDisconnected = false;
 		try {
 			String msg = client.getIn().readLine();
 			client.setPseudo(msg);
@@ -126,10 +125,13 @@ public class SimpleTextSocket {
 				sendToAll(client.getPseudo() + " : " + msg);
 				msg = client.getIn().readLine();
 			}
+		} catch (IOException e) {
+			hasBeenDisconnected = true;
+			System.out.println("client : "+client.getPseudo()+" has been disconnect");
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-		disconnectClient(client);
+		if(!hasBeenDisconnected) disconnectClient(client);
 	}
 
 	/**
@@ -137,9 +139,9 @@ public class SimpleTextSocket {
 	 * @param object representing client
 	 * @throws IOException
 	 */
-	public void disconnectClient(clientData client) {
-		for (Iterator<clientData> iterator = clientList.iterator(); iterator.hasNext();) {
-			clientData clientData = (clientData) iterator.next();
+	public void disconnectClient(ClientData client) {
+		for (Iterator<ClientData> iterator = clientList.iterator(); iterator.hasNext();) {
+			ClientData clientData = iterator.next();
 			if (clientData == client) {
 				if(!clientData.getSocket().isClosed())
 					try {
@@ -160,9 +162,9 @@ public class SimpleTextSocket {
 	 */
 	public void sendToAll(String msg) {
 		try {
-			Iterator<clientData> iterator = clientList.iterator();
+			Iterator<ClientData> iterator = clientList.iterator();
 			while(iterator.hasNext()) {
-				clientData clientData = (clientData) iterator.next();
+				ClientData clientData = (ClientData) iterator.next();
 				clientData.getOut().println(msg);
 				clientData.getOut().flush();
 			}			
@@ -176,15 +178,15 @@ public class SimpleTextSocket {
 	 */
 	public void close() {
 		try {
-			Iterator<clientData> iterator = clientList.iterator();
+			Iterator<ClientData> iterator = clientList.iterator();
 			while(iterator.hasNext()) {
-				clientData clientData = (clientData) iterator.next();
+				ClientData clientData = (ClientData) iterator.next();
 				clientData.getSocket().close();
 			}	
 			if(!socketserver.isClosed()) socketserver.close();
 			clientList.clear();
 			Platform.runLater(()-> {
-				uiSocket.updateSocketStatus(2);		
+				notifyStatusObservers(2);		
 			});
 
 		} catch (Exception e) {
@@ -192,12 +194,28 @@ public class SimpleTextSocket {
 		}
 	}
 	
+	@Override
+	public void subscribe(SocketStatusObserver observer) {
+		this.observersStatus.add(observer);
+	}
+	@Override
+	public void unsubscribe(SocketStatusObserver observer) {
+		this.observersStatus.remove(observer);
+	}
+	@Override
+	public void notifyStatusObservers(int sigValue) {
+		for (SocketStatusObserver observer : observersStatus) {
+			observer.updateSocketStatus(sigValue);
+		}
+		
+	}
+	
 	//--------------Getter-Setter--------------
 	
-	public ArrayList<clientData> getClientList() {
+	public ArrayList<ClientData> getClientList() {
 		return clientList;
 	}
-	public void setClientList(ArrayList<clientData> clientList) {
+	public void setClientList(ArrayList<ClientData> clientList) {
 		this.clientList = clientList;
 	}
 	
@@ -207,6 +225,6 @@ public class SimpleTextSocket {
 	public void setPort(int port) {
 		this.port = port;
 	}
-	
+
 	
 }

@@ -7,12 +7,12 @@ import java.util.ArrayList;
 import org.openjfx.chat.remote.RemoteOptions;
 import org.openjfx.chat.remote.clientDataRemote;
 import org.openjfx.chatServer.socket.SimpleTextSocket;
-import org.openjfx.chatServer.socket.clientData;
+import org.openjfx.chatServer.socket.ClientData;
 
 public class RMIEndPoint extends UnicastRemoteObject implements RemoteOptions {
 
 	private static final long serialVersionUID = 1L;
-	
+
 	SimpleTextSocket serverSocket;
 
 	public RMIEndPoint(SimpleTextSocket serverSocket) throws RemoteException {
@@ -24,10 +24,10 @@ public class RMIEndPoint extends UnicastRemoteObject implements RemoteOptions {
 	public ArrayList<clientDataRemote> getClient() throws RemoteException {
 		ArrayList<clientDataRemote> clientDataRemotes = new ArrayList<>();
 
-		for(clientData clientData : serverSocket.getClientList()) {
-			clientDataRemotes.add(new clientDataRemote(clientData.getPseudo(), clientData.getSocket().getInetAddress().toString()));
+		for(ClientData ClientData : serverSocket.getClientList()) {
+			clientDataRemotes.add(new clientDataRemote(ClientData.getPseudo(), ClientData.getSocket().getInetAddress().toString()));
 		}
-		
+
 		return clientDataRemotes;
 	}
 }
